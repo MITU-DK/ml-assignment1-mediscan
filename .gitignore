@@ -1,0 +1,11 @@
+.venv/
+data/
+results/
+models/
+figures/
+logs/
+samples/
+__pycache__/
+*.zip
+logs_download.txt
+reports/tables.md
