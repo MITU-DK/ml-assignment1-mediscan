@@ -39,6 +39,18 @@ python app.py                        # Gradio demo at http://127.0.0.1:7860
 - `reports/CEO_report.md` - report to the CEO
 - `reports/tables.md` - every number, with the script that produced it
 
+## Note on the refer band
+`part2_threshold.py` was fixed after the Kaggle run: the band now goes from the 99.5%-sensitivity point to the
+98%-specificity point, so the threshold t* falls inside it. It was re-run locally (validation only) and is
+`[0.109, 0.899]`. `results/p2_test.json` still has the old band in its `refer_band` field. The band numbers
+in the reports come from `make_tables.py`, which applies the new band to the saved test predictions
+(`results/preds/test_final.npz`). The test set was not re-read.
+
+## Note on GPU determinism
+Seeds are set and logged, but GPU runs use `cudnn.benchmark`, which is not bit-for-bit deterministic.
+Re-running gives numbers within the reported seed / fold spread, not identical digits. Example from this run:
+the CV fold-0 model and the final model (same data, settings and seed) miss 28 vs 9 pneumonia cases on fold 0.
+
 ## Note on the split
 The reported numbers were produced on Kaggle. Its preinstalled package versions shuffled the
 groups into folds differently from `requirements.txt` versions, so a rerun with the pinned versions

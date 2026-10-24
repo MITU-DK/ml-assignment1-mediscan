@@ -70,7 +70,8 @@ near duplicates into one group (3,287 groups), and then:
 - split the remaining pool (5,035 images) into **5 stratified, patient-grouped folds**. Fold 0 (960 images) is
   the validation set for all Part 1 experiments and for threshold choice. All five folds are used for the CV in Part 2.
 
-Why both, and not k-fold alone: if I used k-fold alone, every number I tuned (architecture, epochs,
+**Chosen: a stratified (group) split with a locked test set. Rejected: stratified k-fold as the replacement.**
+Why: if I used k-fold alone, every number I tuned (architecture, epochs,
 threshold, refer band) would be chosen on the same data I report, and the estimate would be optimistic. A locked
 test set alone, with a single validation split, has no measure of spread. Using a locked test plus CV on the
 pool gives an untouched final number and a mean ± sd. The cost is ~15% fewer training images, which I accepted.
@@ -132,7 +133,8 @@ Input is 1x128x128.
 | dropout + linear | 1 | 257 |
 | **total** | | **417,681** |
 
-**(b) Hypotheses** (written before the ablation runs, see `reports/hypothesis_arogyanet.md`):
+**(b) Hypotheses** (written before the ablation runs, see `reports/hypothesis_arogyanet.md`; the file is in the
+first git commit, 2026-10-24 14:53, before the Kaggle run that produced every ablation number reported here):
 
 1. Residual skips give the gradient a short path through 8 blocks; expected +0.5 to 1 AUC point and a smaller seed spread.
 2. SE re-weights channels with global context; expected +0.3 to 0.5 AUC points, possibly inside the noise.

@@ -166,6 +166,10 @@ def main():
     cv = j("p2_cv.json")
     if cv:
         h("5-fold patient-grouped CV on the pool, at t*", "part2_cv.py")
+        L.append("| fold | TN | FP | FN | TP |\n|---|---|---|---|---|")
+        for i, f in enumerate(cv["folds_at_t_star"]):
+            L.append(f"| {i} | {f['tn']} | {f['fp']} | {f['fn']} | {f['tp']} |")
+        L.append("")
         L.append("| metric | mean ± sd |\n|---|---|")
         for k in ["accuracy", "balanced_accuracy", "precision", "recall", "specificity", "f1", "roc_auc", "pr_auc"]:
             L.append(f"| {k} | {ms(cv['summary_at_t_star'], k)} |")

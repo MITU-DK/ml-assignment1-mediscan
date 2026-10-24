@@ -53,7 +53,7 @@ markers, rib counts and heart outlines. A true duplicate has NCC $\approx$ 1.0 (
 \textbf{Validation set.} 16/16 correct gives a 95\% Clopper--Pearson interval of $[0.025^{1/16},1]=[0.794,1]$ (Wilson $[0.806,1]$).
 \textbf{Replacement} \src{split.py}: I pooled all images and grouped them by patient (within a folder) plus confirmed duplicates (3,287 groups).
 I then made a \emph{locked} stratified group test set (821 images, 227/594) and 5 stratified group folds on the remaining 5,035 (fold 0, 960
-images, is the validation set). I rejected k-fold alone because every threshold and design choice would then be tuned on the data I report.
+images, is the validation set). \textbf{Chosen: stratified group split with a locked test set; rejected: stratified k-fold as the replacement}, because every threshold and design choice would then be tuned on the data I report.
 A single split alone gives no spread. The combination gives both.
 
 \section{Shortcuts and baselines (tasks 4--5)}
@@ -90,7 +90,7 @@ but at 11.2M parameters it is a 44.8 MB file, which is over the 25 MB limit.
 conv $\to$ squeeze-and-excitation $\to$ + skip $\to$ ReLU. Global average pooling replaces flatten+dense, followed by dropout and a linear layer. Input $1\times128\times128$.
 The full layer table with output shapes and parameters is in \texttt{results/arogyanet\_table.md}; the two stage-4 blocks hold 74\% of the weights.
 
-\textbf{Hypotheses} (written before the ablations, \texttt{reports/hypothesis\_arogyanet.md}):
+\textbf{Hypotheses} (written before the ablations, \texttt{reports/hypothesis\_arogyanet.md}; it is in the first git commit, made before the Kaggle run that produced the ablation numbers):
 (1) residual skips give the gradient a short path, expect +0.5--1 AUC point and smaller seed spread;
 (2) SE re-weights channels by global context, expect +0.3--0.5 points, possibly inside the noise.
 
@@ -195,7 +195,8 @@ The final model makes the most mistakes exactly where the acquisition shortcut p
 
 \section{Generalisation test, run once (task 6)}
 
-\src{external\_eval.py}. COVID-19 Radiography Database, Normal + Viral Pneumonia only (11,537 images), evaluated once at the frozen $t^\ast$.
+\src{external\_eval.py}. COVID-19 Radiography Database, Normal + Viral Pneumonia only, evaluated once at the frozen $t^\ast$. The brief says $\sim$4,600 PNGs; the current
+release of the database has 10,192 Normal + 1,345 Viral Pneumonia = 11,537, and all of them were used.
 \textbf{The overlap check found that all 1,345 viral-pneumonia images and 1,341 of the normals are copies of our own Kaggle data} (same pHash+NCC rule).
 Those cannot be called external. The truly external part is 8,851 \emph{normal} films, so only specificity can be measured on it:
 
@@ -246,6 +247,8 @@ A ``99\%'' model with sensitivity 0.90 and specificity 1.00: 99.0\% accuracy, \t
 The full CEO report is \texttt{reports/CEO\_report.md}.
 
 \textbf{Limitations.} 3 seeds is a small sample for ablations of $<$0.5 AUC points. The external set had no usable pneumonia images. All numbers come from one source hospital.
-Kaggle's preinstalled package versions shuffled the group folds differently from my laptop; the split actually used is saved in \texttt{results/split\_used.csv}.
+Kaggle's preinstalled package versions shuffled the group folds differently from my laptop; the split actually used is saved in \texttt{results/split\_used.csv}. GPU training with \texttt{cudnn.benchmark} is not bit-for-bit
+deterministic: the CV fold-0 model and the final model share data, settings and seed, yet miss 28 vs 9 pneumonia cases at $t^\ast$ on that fold.
+This is why every comparison here uses 3 seeds or 5 folds, and why the CV spread is the honest error bar.
 
 \end{document}
