@@ -213,7 +213,7 @@ After resizing, a uniformly small square image looks more like the ``pneumonia''
 the normals have the same mean contrast as ours (61.6 vs 61.3), but the spread is much narrower (Fig.~\ref{fig:ext}).
 
 \begin{figure}[H]\centering
-\includegraphics[width=0.7\textwidth]{p2_external_shift.png}
+\includegraphics[width=0.58\textwidth]{p2_external_shift.png}
 \vspace{-6pt}\caption{Brightness and contrast, primary vs external \src{external\_eval.py}.}\label{fig:ext}
 \end{figure}\vspace{-8pt}
 \textbf{The fix} (CLAHE on train and test, retrained, threshold re-chosen on validation) \textbf{did not help}: specificity fell to 0.54. CLAHE equalises local contrast, but the shift is mainly in size and framing, which it does not touch.
@@ -227,6 +227,12 @@ reject colour images; reject blank images (grey std $<8$); reject anything whose
 (Mahalanobis, Ledoit--Wolf covariance, cut 20.4); return ``low confidence -- refer to a clinician'' inside $[0.109, 0.899]$; otherwise give NORMAL / PNEUMONIA at $t^\ast$.
 \textbf{Dog photo}: rejected as colour. \textbf{Dog photo in grey}: rejected as out of distribution (distance 34.9 vs cut 20.4), even though its raw probability (0.014) would have said NORMAL.
 \textbf{Black and white images}: rejected as blank. The Gradio demo (\texttt{app.py}) wraps the same function and runs offline.
+
+\begin{figure}[H]\centering
+\includegraphics[width=0.48\textwidth]{rejected-dog-image.png}\hfill
+\includegraphics[width=0.48\textwidth]{rejected-white-image.png}
+\vspace{-6pt}\caption{The Gradio demo (\texttt{app.py}) on a dog photo and a blank white image: both rejected, no pneumonia/normal answer and no probability.}
+\end{figure}\vspace{-8pt}
 
 \textbf{What the 98.4\% really was.} I tested an image-level random split (same child in train and test) against a patient-level split \src{--exp leak}: HOG/LR 0.961 vs 0.961, ArogyaNet 0.940 vs 0.952.
 Leakage does not inflate scores on this data, and ResNet18 reaches 0.980 on my clean split, so 98.4\% is a believable \emph{same-hospital} number. It was not a measure of camp performance:
