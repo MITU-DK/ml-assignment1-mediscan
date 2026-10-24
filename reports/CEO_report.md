@@ -27,8 +27,9 @@ Rohit's number was probably real, but it measured the wrong thing:
 - He did not leak duplicate images between train and test. I checked for that specifically, and it is not the problem.
 - His model (ResNet50, about 98 MB) could never have gone out on the 25 MB channel.
 
-When the model reaches a different hospital, the shortcut breaks: different machine, different file sizes. That is
-why the pilot flagged 7 of 10 healthy children.
+A score measured on one hospital's own images says little about other hospitals, other machines or other patients.
+I can't re-test Rohit's model, since there are no saved weights. But my own model shows the same pattern (section 4): excellent on
+the source hospital, many false alarms on outside patients. That is the most likely story behind the pilot's 7 out of 10.
 
 ## 2. What the new model achieves, and at what setting
 
@@ -82,12 +83,14 @@ I tested once on a public database from other hospitals (the COVID-19 Radiograph
 
 - I found that **all 1,345 of its pneumonia images, and 1,341 of its normal ones, are copies of our own training data**,
   so those cannot measure anything new. I did not count them as an external result.
+- On those copied images (re-saved by the database authors as small square PNGs) the model still got 96.5% of normals and
+  96.7% of pneumonia right. So the code and the image format are fine.
 - The remaining **8,851 normal X-rays really are from other hospitals. The model called pneumonia on 37% of them**
-  (specificity 62.8%, against 90.3% on our own test). Those images are a different size (299x299, square) and slightly brighter,
-  so the model is meeting a "new machine" it was never trained on.
-- I tried one fix, contrast equalisation (CLAHE), and **it made things worse** (specificity 54.0%).
+  (specificity 62.8%, against 90.3% on our own test). According to the database's documentation they come from the RSNA
+  dataset, which is mostly **adult** chest X-rays. Our model has only ever seen children aged 1-5, and an adult chest looks different.
+- I tried one fix, contrast equalisation (CLAHE), and **it made things worse** on those images (specificity 54.0%).
 
-So the model I am delivering has the same weakness as Rohit's on a new machine, only smaller.
+So the model I am delivering has the same weakness as Rohit's on new patients, only smaller.
 Before deployment it needs to be fine-tuned or recalibrated on our own camp X-rays.
 
 ## 5. What it must not be used for
