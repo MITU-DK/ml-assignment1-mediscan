@@ -37,9 +37,19 @@ if os.path.isdir("/kaggle/input"):
     print("kaggle inputs:", p, e)
 
 if not os.path.exists(link):
-    kagglehub.dataset_download("paultimothymooney/chest-xray-pneumonia", output_dir=primary)
-    os.symlink(os.path.join(primary, "chest_xray"), link)
+    # inside a Kaggle notebook kagglehub may ignore output_dir and return its own path,
+    # so look for the folders under whatever path it gives back
+    got = kagglehub.dataset_download("paultimothymooney/chest-xray-pneumonia", output_dir=primary)
+    p = find_dir(got, ["train/NORMAL", "test/PNEUMONIA"]) or find_dir(primary, ["train/NORMAL", "test/PNEUMONIA"])
+    os.symlink(p, link)
 
 if not os.path.exists(os.path.join(external, ext_name)):
-    kagglehub.dataset_download("tawsifurrahman/covid19-radiography-database", output_dir=external)
+    got = kagglehub.dataset_download("tawsifurrahman/covid19-radiography-database", output_dir=external)
+    e = find_dir(got, ["Normal/images", "Viral Pneumonia/images"])
+    if e and not os.path.exists(os.path.join(external, ext_name)):
+        os.makedirs(external, exist_ok=True)
+        os.symlink(e, os.path.join(external, ext_name))
+
+assert os.path.isdir(os.path.join(link, "train", "NORMAL")), "primary dataset not found"
+assert os.path.isdir(os.path.join(external, ext_name, "Normal", "images")), "external dataset not found"
 print("data ready in", DATA)
