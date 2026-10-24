@@ -259,4 +259,9 @@ Kaggle's preinstalled package versions shuffled the group folds differently from
 deterministic: the CV fold-0 model and the final model share data, settings and seed, yet miss 28 vs 9 pneumonia cases at $t^\ast$ on that fold.
 This is why every comparison here uses 3 seeds or 5 folds, and why the CV spread is the honest error bar.
 
+\textbf{Not tried, worth trying next.} (1) Store ResNet18 in fp16: about 22\,MB, under the 25\,MB limit, and it was the best model on validation (AUC 0.996 vs 0.990).
+It would still need a latency check and the same once-only test. (2) Pad or crop to a square instead of stretching: the aspect ratio would then
+stop carrying the size shortcut (\S2). Neither result can be read off the locked test or the external set, which were already used once.
+They need new labelled data, ideally from the camp's own machine.
+
 \end{document}

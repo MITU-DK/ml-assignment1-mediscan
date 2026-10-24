@@ -105,3 +105,6 @@ Before deployment it needs to be fine-tuned or recalibrated on our own camp X-ra
 1. Collect 200-300 X-rays from our camp machine, with a radiologist's labels.
 2. Measure sensitivity and specificity there; adjust the threshold or fine-tune on that data.
 3. Run a supervised pilot in which a clinician reviews every flagged and every "low confidence" child.
+4. Two technical changes I did not try, and would test on that camp data: saving the larger ResNet18 model at half precision
+   (about 22 MB, inside the 25 MB limit, and slightly better on validation), and feeding images in without stretching them
+   to a square, so the model can't lean on image shape.
