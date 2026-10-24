@@ -1,0 +1,227 @@
+\documentclass[10pt,a4paper]{article}
+\usepackage[margin=1.8cm]{geometry}
+\usepackage{graphicx,booktabs,amsmath,float,caption,enumitem}
+\usepackage[hidelinks]{hyperref}
+\graphicspath{{../figures/}}
+\captionsetup{font=small}
+\setlist{itemsep=1pt,topsep=2pt}
+\setlength{\parskip}{3pt}
+\newcommand{\src}[1]{{\footnotesize\texttt{[#1]}}}
+
+\title{\vspace{-1.2cm}The MediScan Audit: pneumonia screening for Arogya Diagnostics\\\large ML Practical Assignment, technical report}
+\author{Mitu Kumar (B24CS029)}
+\date{}
+
+\begin{document}
+\maketitle
+\vspace{-0.8cm}
+
+\noindent Every number in this report is written to a json file in \texttt{results/} by the script shown in
+brackets. \texttt{run\_all.sh} reproduces all of them; \texttt{make\_tables.py} collects them into \texttt{reports/tables.md}.
+Framework: PyTorch. Seeds for Python, NumPy and PyTorch are set and logged in every run. The runs reported here were
+made on a Kaggle T4 GPU. The exact split used is saved as \texttt{results/split\_used.csv}.
+
+\section{Audit of the data (Part 1, tasks 1--3)}
+
+\textbf{Inventory} \src{audit.py}. Train 1341/3875, test 234/390, val 8/8 (NORMAL/PNEUMONIA). All 5,856 images are
+true greyscale (283 are stored as RGB, but with three identical channels).
+
+\textbf{The classes differ in acquisition, not just anatomy.} Mean brightness is identical (122.4 vs 122.9, AUC 0.51),
+but NORMAL films are much larger: median $1654\times1323$ vs $1160\times776$ px. Image height alone separates the classes
+with ROC-AUC 0.915, area with 0.91 and aspect ratio with 0.84 (Fig.~\ref{fig:hist}). A model trained on these folders can
+learn ``small, wide file $\Rightarrow$ pneumonia''. That rule says nothing about lungs, and it will not hold at a camp that uses a single X-ray machine.
+
+\begin{figure}[H]\centering
+\includegraphics[width=0.92\textwidth]{p1_size_brightness_hist.png}
+\vspace{-6pt}\caption{Size and brightness by class. Brightness overlaps; size does not.}\label{fig:hist}
+\end{figure}\vspace{-8pt}
+
+\textbf{Duplicates.} 30 exact (md5) duplicate groups, all inside one folder. pHash at $\le$4 bits flags 265 pairs (26
+train--test), but on inspection those were different children; paediatric AP films look alike at $8\times8$ DCT. I therefore
+used pHash ($\le$10 bits) only for candidates and confirmed them with pixel correlation (NCC$\ge$0.97 at $64\times64$):
+\textbf{34 confirmed pairs, all within a split, zero across train and test} (highest train--test NCC 0.965, a different patient;
+\texttt{figures/p1\_worst\_pairs.png}). The same \texttt{personNNN} id appears in train and test 170 times. Same-id pairs within train
+are more alike than random pairs (median pHash 24 vs 26), but across train and test they are not (24 vs 24), so the test folder
+uses its own numbering. These ids are not evidence of leakage.
+
+\textbf{Validation set.} 16/16 correct gives a 95\% Clopper--Pearson interval of $[0.025^{1/16},1]=[0.794,1]$ (Wilson $[0.806,1]$).
+\textbf{Replacement} \src{split.py}: I pooled all images and grouped them by patient (within a folder) plus confirmed duplicates (3,287 groups).
+I then made a \emph{locked} stratified group test set (821 images, 227/594) and 5 stratified group folds on the remaining 5,035 (fold 0, 960
+images, is the validation set). I rejected k-fold alone because every threshold and design choice would then be tuned on the data I report.
+A single split alone gives no spread. The combination gives both.
+
+\section{Shortcuts and baselines (tasks 4--5)}
+
+\begin{table}[H]\centering\small
+\begin{tabular}{lcccccc}\toprule
+model (fold-0 validation, threshold 0.5) & acc & bal.\ acc & precision & recall & F1 & PR-AUC / ROC-AUC\\\midrule
+majority class & 0.731 & 0.500 & 0.731 & 1.000 & 0.845 & 0.731 / 0.500\\
+LR on $16\times16$ image & 0.941 & 0.923 & 0.957 & 0.962 & 0.959 & 0.992 / 0.980\\
+LR on $16\times16$, \textbf{lungs greyed out} & 0.894 & 0.853 & 0.916 & 0.942 & 0.928 & 0.973 / 0.941\\
+LR on aspect + area only & 0.842 & 0.778 & 0.874 & 0.916 & 0.894 & 0.958 / 0.905\\
+HOG + logistic regression & 0.963 & 0.949 & 0.970 & 0.979 & 0.974 & 0.996 / 0.990\\\bottomrule
+\end{tabular}
+\vspace{-4pt}\caption{Crippled models and baselines \src{train.py --exp shortcut, baselines}.}\label{tab:base}
+\end{table}\vspace{-10pt}
+
+With the lungs removed, the border of a $16\times16$ image still gives AUC 0.94, and two numbers about the file give AUC 0.91 (chance accuracy is 0.73).
+Most of what makes this dataset ``easy'' is available without looking at the lungs, and any CNN trained on it can use these cues.
+HOG + LR (AUC 0.990) is the bar a deep model has to clear.
+
+\section{Deep models (tasks 6--9)}
+
+\textbf{ResNet18 transfer} \src{--exp transfer}. Expectation: the low-level ImageNet filters (edges, textures) should transfer to greyscale
+radiographs, while the high-level ones should not matter. I fed the grey image into all three channels with ImageNet normalisation and fine-tuned the whole network at 224 px.
+Over 3 seeds: accuracy $0.980\pm0.002$, ROC-AUC $0.996\pm0.000$, PR-AUC $0.999\pm0.000$. This was the best and most stable single model, as expected,
+but at 11.2M parameters it is a 44.8 MB file, which is over the 25 MB limit.
+
+\begin{minipage}[t]{0.27\textwidth}\vspace{0pt}
+\includegraphics[width=\textwidth]{p1_arogyanet_diagram.png}
+\end{minipage}\hfill
+\begin{minipage}[t]{0.70\textwidth}\vspace{0pt}
+\textbf{ArogyaNet} \src{models.py}. My own design, trained from scratch, \textbf{417,681 parameters}. A stem $3\times3$/2 conv is followed by
+4 stages $\times$ 2 blocks (32/64/128/256 channels, first block stride 2). Each block is depthwise-separable conv $\to$ depthwise-separable
+conv $\to$ squeeze-and-excitation $\to$ + skip $\to$ ReLU. Global average pooling replaces flatten+dense, followed by dropout and a linear layer. Input $1\times128\times128$.
+The full layer table with output shapes and parameters is in \texttt{results/arogyanet\_table.md}; the two stage-4 blocks hold 74\% of the weights.
+
+\textbf{Hypotheses} (written before the ablations, \texttt{reports/hypothesis\_arogyanet.md}):
+(1) residual skips give the gradient a short path, expect +0.5--1 AUC point and smaller seed spread;
+(2) SE re-weights channels by global context, expect +0.3--0.5 points, possibly inside the noise.
+
+\vspace{4pt}
+{\small\begin{tabular}{lccc}\toprule
+fold-0 val, 3 seeds & ROC-AUC & $\Delta$AUC (paired) & bal.\ acc\\\midrule
+full & $0.990\pm0.001$ & -- & $0.941\pm0.011$\\
+no residual & $0.978\pm0.003$ & $\mathbf{-0.0118\pm0.0029}$ & $0.918\pm0.010$\\
+no SE & $0.986\pm0.004$ & $-0.0042\pm0.0033$ & $0.928\pm0.007$\\
+two-branch (+meta) & $0.991\pm0.001$ & $+0.0008\pm0.0014$ & $0.951\pm0.009$\\
+96 px & $0.991\pm0.001$ & $+0.0004\pm0.0006$ & $0.952\pm0.006$\\
+224 px & $0.991\pm0.000$ & $+0.0008\pm0.0011$ & $0.954\pm0.003$\\
+no augmentation & $0.986\pm0.002$ & $-0.0040\pm0.0009$ & $0.941\pm0.002$\\
+flip + rot + zoom & $0.990\pm0.001$ & $+0.0001\pm0.0018$ & $0.944\pm0.000$\\\bottomrule
+\end{tabular}}
+\end{minipage}
+
+\vspace{4pt}
+\textbf{Ablation results.} \emph{Residual: supported.} Removing the skips costs 1.2 AUC points on every seed, four times the spread, and recall falls from 0.978 to 0.945.
+The ``smaller spread'' part of the hypothesis did not hold. \emph{SE: inside the noise.} AUC dropped on all three seeds, but by only 0.0006, 0.0049 and 0.0071. The mean
+is under two standard deviations, so I cannot claim SE helps. ArogyaNet ties HOG+LR and stays below ResNet18.
+
+\textbf{Two-branch} \src{--exp twobranch}. Adding (mean intensity, aspect, area) through a 3$\to$16$\to$16 dense branch changes nothing measurable ($+0.0008\pm0.0014$).
+This is not because the numbers are uninformative: alone they give AUC 0.91. The image branch already reads the same cues, as task 4 showed.
+Had the branch helped, the model would have learned something about \emph{how these patients' films were saved}, not about pneumonia.
+At a camp with one machine that signal would carry no information, so I did not ship this version.
+
+\textbf{Resolution and augmentation} \src{--exp res\_aug}. Going from 96 to 224 px makes no difference (both within 0.001 of 128 px), so I kept 128 for speed.
+Augmentation helps a little (no augmentation: $-0.004\pm0.001$). \textbf{Horizontal flipping is medically wrong} for chest films. It moves the heart to the right
+(dextrocardia/situs inversus), mirrors the stomach bubble and the ``R'' marker, and flips the meaning of any side-specific finding (right-lower-lobe vs left).
+The flipped image is therefore not a valid example of its label. Here it was harmless to the score, but that only shows the score cannot see the problem.
+The final model uses $\pm10^\circ$ rotation, 0.9--1.1 zoom and small shifts, with no flips.
+
+\section{Making it honest (Part 2)}
+
+\textbf{Tuning and regularisation} \src{part2\_tune.py}. Random search over learning rate ($10^{-3.7}$--$10^{-2.3}$), batch (16/32/64), dropout (0--0.5)
+and weight decay ($10^{-6}$--$10^{-2}$). Budget: 12 configurations $\times$ 8 epochs, scored by fold-0 AUC. Best: lr $1.5\times10^{-3}$, batch 32, dropout 0.22,
+wd $1.7\times10^{-6}$ (AUC 0.9913). The final model was trained with these settings for 15 epochs, with rotation/zoom augmentation and early stopping on validation AUC (patience 5).
+Fig.~\ref{fig:reg}: without dropout, weight decay or augmentation, \textbf{overfitting begins at epoch 9}. Validation loss bottoms out at 0.177, then climbs to 0.20 while training loss falls to 0.001.
+The regularised run bottoms out later (epoch 13) and much lower (0.092), and stays flat. Early stopping at epoch 9 would have saved the unregularised model about 14\% in validation loss
+(i.e.\ calibration). AUC alone barely moved after epoch 9, so early stopping mainly protects the \emph{probabilities}, which matter because the decision is made by thresholding them.
+
+\begin{figure}[H]\centering
+\includegraphics[width=0.78\textwidth]{p2_reg_curves.png}
+\vspace{-6pt}\caption{Unregularised vs regularised training (30 epochs, no early stopping). Grey lines: minimum validation loss.}\label{fig:reg}
+\end{figure}\vspace{-10pt}
+
+\textbf{Imbalance and the threshold} \src{part2\_threshold.py}. Class weights (pos\_weight $=n_\text{neg}/n_\text{pos}=0.37$) change the \emph{model}: ROC-AUC 0.9916$\to$0.9924,
+Spearman rank correlation between the two models' scores is only 0.960, so they order patients differently. Threshold moving changes only the \emph{decision}. The ROC curve is
+the same curve and only the operating point slides along it: moving the plain model to $t=0.69$ reproduces the weighted model's specificity (0.938), with recall 0.967 vs 0.976.
+\textbf{Cost matrix:} FN = 20, FP = 1, camp prevalence $\pi=0.1$. Expected cost per child $=20\pi(1-\text{TPR})+(1-\pi)\,\text{FPR}$, minimised on validation at
+$\mathbf{t^\ast=0.448}$ (0.106 per child; 0.114 at $t=0.5$; 2.0 for ``always normal'', 0.9 for ``refer everyone''). Fig.~\ref{fig:thr} marks $t^\ast$ on the ROC curve and on the PR curve
+re-weighted to 10\% prevalence, where precision is only 0.55. \textbf{Refer band}: $[0.109, 0.899]$, from the 99.5\%-sensitivity point to the 98\%-specificity point on validation.
+
+\begin{figure}[H]\centering
+\includegraphics[width=\textwidth]{p2_threshold.png}
+\vspace{-14pt}\caption{Validation probabilities, ROC, PR at dataset and camp prevalence, and expected cost vs threshold. Red = chosen $t^\ast$.}\label{fig:thr}
+\end{figure}\vspace{-10pt}
+
+\textbf{Evaluation} \src{part2\_cv.py, evaluate\_test.py}. 5-fold patient-grouped CV on the pool at $t^\ast$: accuracy $0.959\pm0.007$, balanced accuracy $0.947\pm0.010$,
+precision $0.971\pm0.009$, recall $0.974\pm0.010$, specificity $0.920\pm0.025$, F1 $0.972\pm0.005$, ROC-AUC $0.990\pm0.003$, PR-AUC $0.996\pm0.002$.
+\textbf{Locked test, run once} (821 images): TN 205, FP 22, FN 13, TP 581, i.e.\ accuracy 0.957, precision 0.964, \textbf{recall 0.978}, specificity 0.903, F1 0.971,
+ROC-AUC 0.988, PR-AUC 0.995. These agree with CV. Of the test images, 11.6\% fall in the refer band; on the rest, recall is 0.994 (3 misses) and specificity 0.953.
+\emph{Why accuracy is the wrong headline:} the test set is 72\% pneumonia and the camp is 10\%, so the same model has different accuracy at each and a constant ``normal'' answer already gets 90\% at the camp.
+Accuracy weighs a missed sick child the same as a false alarm, while here a miss costs about 20 times more.
+
+\textbf{Ensembles} (locked test, $t=0.5$, mean over seeds for single models):
+
+{\centering\resizebox{\textwidth}{!}{\begin{tabular}{lccccc}\toprule
+model & ROC-AUC & PR-AUC & acc & bal.\ acc & F1\\\midrule
+ArogyaNet full (3 seeds) & 0.988 & 0.995 & 0.953 & 0.936 & 0.968\\
+ArogyaNet no residual / no SE & 0.972 / 0.981 & 0.989 / 0.992 & 0.924 / 0.944 & 0.906 / 0.925 & 0.947 / 0.962\\
+ArogyaNet two-branch & 0.991 & 0.996 & 0.961 & 0.946 & 0.974\\
+ResNet18 & 0.996 & 0.998 & 0.978 & 0.972 & 0.985\\
+HOG + LR & 0.990 & 0.996 & 0.961 & 0.944 & 0.973\\
+soft vote: ArogyaNet$\times$3 + ResNet18$\times$3 & 0.996 & 0.999 & 0.978 & 0.967 & 0.985\\
+soft vote + HOG/LR & 0.996 & 0.999 & 0.979 & 0.968 & 0.986\\
+Random forest / AdaBoost on ArogyaNet embeddings & 0.987 / 0.988 & 0.992 / 0.995 & 0.961 / 0.959 & 0.944 / 0.941 & 0.973 / 0.972\\
+\textbf{shipped ArogyaNet} & 0.988 & 0.995 & 0.957 & 0.945 & 0.971\\\bottomrule
+\end{tabular}}\par}
+
+\vspace{3pt}The soft vote does \textbf{not} beat its best member (ResNet18: same AUC 0.996, lower balanced accuracy 0.967 vs 0.972). The members make highly correlated mistakes:
+they see the same images and the same shortcuts, and averaging in weaker, similar models pulls the strongest one towards them. RF and AdaBoost on the 256-d embedding equal the CNN's own linear head,
+so the embedding is already linearly separable and trees add nothing. None of the ensembles fit the 25 MB / 200 ms budget better than a single small model.
+
+\begin{minipage}[t]{0.5\textwidth}\vspace{0pt}
+\includegraphics[width=\textwidth]{p2_embeddings.png}
+\end{minipage}\hfill
+\begin{minipage}[t]{0.47\textwidth}\vspace{0pt}
+\textbf{Feature space} \src{evaluate\_test.py}. PCA of the test embeddings: the first component explains 69\% of the variance and is essentially the class axis. t-SNE shows two clusters.
+k-means ($k=2$) recovers the labels with \textbf{ARI 0.825, purity 0.956}. The 35 errors (22 FP, 13 FN) all sit on the boundary between the clusters.
+\textbf{What they share is size}: false positives are NORMAL films that are \emph{smaller} than usual for normals (mean area 1.92 MP vs 2.52 MP for all normals), and
+false negatives are pneumonia films that are \emph{larger} than usual for pneumonia (1.53 MP vs 1.02 MP). Brightness does not differ (120--122).
+The final model makes the most mistakes exactly where the acquisition shortcut points the wrong way, so it still partly relies on it.
+\end{minipage}
+
+\section{Generalisation test, run once (task 6)}
+
+\src{external\_eval.py}. COVID-19 Radiography Database, Normal + Viral Pneumonia only (11,537 images), evaluated once at the frozen $t^\ast$.
+\textbf{The overlap check found that all 1,345 viral-pneumonia images and 1,341 of the normals are copies of our own Kaggle data} (same pHash+NCC rule).
+Those cannot be called external. The truly external part is 8,851 \emph{normal} films, so only specificity can be measured on it:
+
+{\small\centering\begin{tabular}{lcccc}\toprule
+& specificity (8,851 external normals) & all 11,537: bal.\ acc & recall & ROC-AUC\\\midrule
+internal locked test & 0.903 & 0.941 & 0.978 & 0.988\\
+final model, external & \textbf{0.628} ($-$0.275) & 0.820 & 0.967* & 0.935*\\
+CLAHE-trained model (the fix) & 0.540 & 0.767 & 0.936* & 0.825*\\\bottomrule
+\end{tabular}\par}
+{\footnotesize *includes the 1,345 pneumonia images that are copies of training-pool data, so it is optimistic.}
+
+\vspace{3pt}\textbf{The drop}: specificity falls from 0.90 to 0.63, so 37\% of healthy external children would be flagged. That is the pilot's ``7 out of 10 healthy children'' in smaller form.
+In terms of the Part 1 statistics: the external films are all $299\times299$ (aspect 1.0, 0.09 MP), while our NORMAL class lives at 2.2 MP and aspect 1.23 and PNEUMONIA at 0.9 MP and 1.49.
+After resizing, a uniformly small square image looks more like the ``pneumonia'' side of every size cue the model picked up. The external films are also brighter (mean 129 vs 122) with similar contrast.
+\textbf{The fix} (CLAHE on train and test, retrained, threshold re-chosen on validation) \textbf{did not help}: specificity fell to 0.54. CLAHE equalises local contrast, but the shift is mainly in size and framing, which it does not touch.
+An honest fix needs labelled images from the target machine.
+
+\section{Shipping (task 7) and the report to the CEO}
+
+\src{predict.py, app.py, ship\_check.py}. \texttt{final.pt} is \textbf{1.77 MB} (ResNet18: 44.8 MB). On the i7-12700H laptop CPU with 1 thread, one image takes \textbf{27.5 ms on average,
+59 ms at the 95th percentile}, plus a one-off model load of 19 ms. Both are well inside 200 ms and 25 MB. \texttt{predict.py} prints the class and probability. Its checks run in this order:
+reject colour images; reject blank images (grey std $<8$); reject anything whose embedding is further from the training data than the 99.5th percentile of validation
+(Mahalanobis, Ledoit--Wolf covariance, cut 20.4); return ``low confidence -- refer to a clinician'' inside $[0.109, 0.899]$; otherwise give NORMAL / PNEUMONIA at $t^\ast$.
+\textbf{Dog photo}: rejected as colour. \textbf{Dog photo in grey}: rejected as out of distribution (distance 34.9 vs cut 20.4), even though its raw probability (0.014) would have said NORMAL.
+\textbf{Black and white images}: rejected as blank. The Gradio demo (\texttt{app.py}) wraps the same function and runs offline.
+
+\textbf{What the 98.4\% really was.} I tested an image-level random split (same child in train and test) against a patient-level split \src{--exp leak}: HOG/LR 0.961 vs 0.961, ArogyaNet 0.940 vs 0.952.
+Leakage does not inflate scores on this data, and ResNet18 reaches 0.980 on my clean split, so 98.4\% is a believable \emph{same-hospital} number. It was not a measure of camp performance:
+same-site tests reward the acquisition shortcut (84\% from file size alone), the 16-image validation set could not detect anything, and ResNet50 ($\approx$98 MB) never fitted the channel.
+
+\textbf{Why ``99\% accuracy'' is the wrong target -- arithmetic at 10\% prevalence, per 1,000 children.} ``Always normal'': 90.0\% accuracy, 100 sick children missed.
+A ``99\%'' model with sensitivity 0.90 and specificity 1.00: 99.0\% accuracy, \textbf{10 missed}, expected cost 0.20 per child. Our model at $t^\ast$ (test sensitivity 0.978, specificity 0.903):
+\textbf{91.1\% accuracy, 2 missed}, 87 false alarms, PPV 0.53, NPV 0.997, expected cost 0.13. The model with the lowest accuracy is the safest one.
+\textbf{What to ask for instead}: sensitivity $\ge$0.97 with specificity $\ge$0.85, measured on 200--300 labelled X-rays from the camp's own machine, under the same 200 ms / 25 MB limits.
+\textbf{It must not be used} as a diagnosis, on a new machine before local validation (expect $\sim$37\% false alarms), on adults, lateral views or other diseases, or to overrule a clinician.
+The full CEO report is \texttt{reports/CEO\_report.md}.
+
+\textbf{Limitations.} 3 seeds is a small sample for ablations of $<$0.5 AUC points. The external set had no usable pneumonia images. All numbers come from one source hospital.
+Kaggle's preinstalled package versions shuffled the group folds differently from my laptop; the split actually used is saved in \texttt{results/split\_used.csv}.
+
+\end{document}

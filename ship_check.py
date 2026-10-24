@@ -67,7 +67,8 @@ def main():
     P._load()
     out["model_load_ms"] = (time.perf_counter() - t0) * 1000
     print(out)
-    save_json(out, "p2_ship.json")
+    # SHIP_OUT lets the latency be re-measured on another machine without overwriting
+    save_json(out, os.environ.get("SHIP_OUT", "p2_ship.json"))
 
 
 if __name__ == "__main__":

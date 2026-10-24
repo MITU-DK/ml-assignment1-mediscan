@@ -1,6 +1,5 @@
 .venv/
 data/
-results/
 models/
 figures/
 logs/
@@ -9,3 +8,6 @@ __pycache__/
 *.zip
 logs_download.txt
 reports/tables.md
+!results/
+results/*
+!results/split_used.csv

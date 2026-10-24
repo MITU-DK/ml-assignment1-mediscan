@@ -71,10 +71,15 @@ def main():
         "always_refer": C_FP * (1 - CAMP_PREV),
     }
 
-    # ---- "refer to clinician" band: between 98% sensitivity and 98% specificity points
-    t_lo = float(thr[np.argmax(tpr >= 0.98)])
+    # ---- "refer to clinician" band: between the 99.5% sensitivity point and the
+    # 98% specificity point. Below t_lo almost no pneumonia is left -> confident NORMAL,
+    # above t_hi almost no normals -> confident PNEUMONIA. t* sits inside the band.
+    t_lo = float(thr[np.argmax(tpr >= 0.995)])
     t_hi = float(thr[np.where(fpr <= 0.02)[0][-1]])
     out["refer_band"] = [min(t_lo, t_hi), max(t_lo, t_hi)]
+    band = (p >= out["refer_band"][0]) & (p <= out["refer_band"][1])
+    out["refer_band_val"] = {"share_referred": float(band.mean()),
+                             "metrics_outside_band_at_t_star": metrics_at(y[~band], p[~band], t_star)}
 
     # ---- why 99% accuracy is the wrong target: arithmetic at 10% prevalence
     sens, spec = out["val_at_t_star"]["recall"], out["val_at_t_star"]["specificity"]

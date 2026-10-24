@@ -6,7 +6,7 @@ Order of checks:
   1. colour image?           -> reject, chest X-rays are greyscale
   2. (almost) blank image?   -> reject
   3. embedding far from anything seen in training (Mahalanobis > 99.5th pct of val) -> reject
-  4. probability inside the refer band [98%-sensitivity point, 98%-specificity point]
+  4. probability inside the refer band [99.5%-sensitivity point, 98%-specificity point]
                              -> "low confidence - refer to a clinician"
   5. otherwise NORMAL / PNEUMONIA at the cost-based threshold t*
 Rejected inputs never get a pneumonia / normal answer.
