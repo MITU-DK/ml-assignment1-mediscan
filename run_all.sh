@@ -31,4 +31,5 @@ python external_eval.py    | tee logs/external.log  # the only reader of the ext
 python ship_check.py       | tee logs/ship.log
 
 python make_tables.py                            # results/*.json -> reports/tables.md
+python make_report_figs.py                       # wide worst-pairs figure for the report
 echo "done. demo: python app.py"

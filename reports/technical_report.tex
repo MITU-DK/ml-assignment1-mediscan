@@ -44,6 +44,12 @@ used pHash ($\le$10 bits) only for candidates and confirmed them with pixel corr
 are more alike than random pairs (median pHash 24 vs 26), but across train and test they are not (24 vs 24), so the test folder
 uses its own numbering. These ids are not evidence of leakage.
 
+\begin{figure}[H]\centering
+\includegraphics[width=0.93\textwidth]{p1_worst_pairs_wide.png}
+\vspace{-6pt}\caption{The five most similar test/train pairs \src{make\_report\_figs.py from audit.json}. Different children: different
+markers, rib counts and heart outlines. A true duplicate has NCC $\approx$ 1.0 (\texttt{figures/p1\_true\_duplicate.png}).}
+\end{figure}\vspace{-8pt}
+
 \textbf{Validation set.} 16/16 correct gives a 95\% Clopper--Pearson interval of $[0.025^{1/16},1]=[0.794,1]$ (Wilson $[0.806,1]$).
 \textbf{Replacement} \src{split.py}: I pooled all images and grouped them by patient (within a folder) plus confirmed duplicates (3,287 groups).
 I then made a \emph{locked} stratified group test set (821 images, 227/594) and 5 stratified group folds on the remaining 5,035 (fold 0, 960
@@ -151,6 +157,12 @@ ROC-AUC 0.988, PR-AUC 0.995. These agree with CV. Of the test images, 11.6\% fal
 \emph{Why accuracy is the wrong headline:} the test set is 72\% pneumonia and the camp is 10\%, so the same model has different accuracy at each and a constant ``normal'' answer already gets 90\% at the camp.
 Accuracy weighs a missed sick child the same as a false alarm, while here a miss costs about 20 times more.
 
+\begin{figure}[H]\centering
+\includegraphics[width=0.27\textwidth]{p2_test_confusion.png}\hfill
+\includegraphics[width=0.70\textwidth]{p2_errors.png}
+\vspace{-6pt}\caption{Locked test set at $t^\ast$: confusion matrix, and the first ten misclassified images with their probabilities.}
+\end{figure}\vspace{-8pt}
+
 \textbf{Ensembles} (locked test, $t=0.5$, mean over seeds for single models):
 
 {\centering\resizebox{\textwidth}{!}{\begin{tabular}{lccccc}\toprule
@@ -197,7 +209,13 @@ CLAHE-trained model (the fix) & 0.540 & 0.767 & 0.936* & 0.825*\\\bottomrule
 
 \vspace{3pt}\textbf{The drop}: specificity falls from 0.90 to 0.63, so 37\% of healthy external children would be flagged. That is the pilot's ``7 out of 10 healthy children'' in smaller form.
 In terms of the Part 1 statistics: the external films are all $299\times299$ (aspect 1.0, 0.09 MP), while our NORMAL class lives at 2.2 MP and aspect 1.23 and PNEUMONIA at 0.9 MP and 1.49.
-After resizing, a uniformly small square image looks more like the ``pneumonia'' side of every size cue the model picked up. The external films are also brighter (mean 129 vs 122) with similar contrast.
+After resizing, a uniformly small square image looks more like the ``pneumonia'' side of every size cue the model picked up. The external films are also slightly brighter (mean 129 vs 122) with a second bright mode near 165, and their contrast is more uniform:
+the normals have the same mean contrast as ours (61.6 vs 61.3), but the spread is much narrower (Fig.~\ref{fig:ext}).
+
+\begin{figure}[H]\centering
+\includegraphics[width=0.7\textwidth]{p2_external_shift.png}
+\vspace{-6pt}\caption{Brightness and contrast, primary vs external \src{external\_eval.py}.}\label{fig:ext}
+\end{figure}\vspace{-8pt}
 \textbf{The fix} (CLAHE on train and test, retrained, threshold re-chosen on validation) \textbf{did not help}: specificity fell to 0.54. CLAHE equalises local contrast, but the shift is mainly in size and framing, which it does not touch.
 An honest fix needs labelled images from the target machine.
 

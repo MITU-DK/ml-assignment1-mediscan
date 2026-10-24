@@ -46,7 +46,7 @@ wide image squashed to a square has visibly distorted anatomy.
   (NCC >= 0.97).
 - **Confirmed near duplicates:** 34 pairs, 28 within train and 6 within test, usually the same patient's file saved twice.
   **Across train and test: zero.** The most similar train/test pair has NCC 0.965 and is two different patients.
-  `figures/p1_worst_pairs.png` shows the five closest train/test pairs side by side, and `figures/p1_true_duplicate.png` shows a real duplicate for comparison.
+  `figures/p1_worst_pairs.png` (and the wider `figures/p1_worst_pairs_wide.png`) shows the five closest train/test pairs side by side, and `figures/p1_true_duplicate.png` shows a real duplicate for comparison.
 - **Patient ids.** The same `personNNN` string appears in both train and test (170 ids). I checked whether
   these are the same children: pairs with the same id inside train are slightly more alike than random pairs
   (median pHash distance 24 vs 26), but across train and test same-id pairs are no closer than random (24 vs 24).
